@@ -17,3 +17,20 @@ export function formatDate(dateString: string | Date | undefined): string {
     minute: '2-digit',
   });
 }
+
+/**
+ * Formats duration strictly in months:
+ * e.g. 1 -> "1 month"
+ * e.g. 2 -> "2 months"
+ * e.g. 3 -> "3 months"
+ * e.g. 12 -> "12 months"
+ */
+export function formatDuration(duration: number | undefined): string {
+  if (!duration && duration !== 0) return '1 month';
+  const num = Number(duration);
+  if (isNaN(num) || num <= 0) return '1 month';
+
+  return `${num} ${num === 1 ? 'month' : 'months'}`;
+}
+
+

@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Modal } from '@/components/ui/modal';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatDuration } from '@/lib/utils';
 import {
   FileText,
   Search,
@@ -24,6 +24,8 @@ import {
   Copy,
   Check,
   Award,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react';
 
 export default function ContractsPage() {
@@ -42,6 +44,10 @@ export default function ContractsPage() {
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [licenseLoading, setLicenseLoading] = useState(false);
+
+  // Delete Confirmation Modal
+  const [contractToDelete, setContractToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // New Contract Modal
   const [isNewContractOpen, setIsNewContractOpen] = useState(false);
@@ -94,6 +100,34 @@ export default function ContractsPage() {
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const promptDeleteContract = (id: string, businessName: string) => {
+    setContractToDelete({ id, name: businessName });
+  };
+
+  const confirmDeleteContract = async () => {
+    if (!contractToDelete) return;
+    setDeleteLoading(true);
+    try {
+      const res = await fetch(`/api/contracts/${contractToDelete.id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        fetchContracts();
+        if (selectedContract && selectedContract._id === contractToDelete.id) {
+          setSelectedContract(null);
+        }
+        setContractToDelete(null);
+      } else {
+        const d = await res.json();
+        alert(d.error || 'Failed to delete contract');
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -361,7 +395,7 @@ export default function ContractsPage() {
                               {c.plan}
                             </Badge>
                             <span className="text-[11px] text-slate-600 font-medium">
-                              {c.duration} {c.duration === 1 ? 'year' : 'years'}
+                              {formatDuration(c.duration)}
                             </span>
                           </div>
                         </td>
@@ -412,6 +446,16 @@ export default function ContractsPage() {
                               <KeyRound className="h-3 w-3" />
                               POS Key
                             </Button>
+
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => promptDeleteContract(c._id, c.businessName)}
+                              className="h-7 w-7 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50"
+                              title="Delete contract agreement"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
                           </div>
                         </td>
                       </tr>
@@ -448,7 +492,7 @@ export default function ContractsPage() {
                 </div>
                 <div>
                   <span className="text-slate-400 block text-[10px] uppercase font-semibold">Subscription Plan</span>
-                  <span className="font-bold text-[#23169c] uppercase">{selectedContract.plan} ({selectedContract.duration} yr)</span>
+                  <span className="font-bold text-[#23169c] uppercase">{selectedContract.plan} ({formatDuration(selectedContract.duration)})</span>
                 </div>
                 <div>
                   <span className="text-slate-400 block text-[10px] uppercase font-semibold">Start Date</span>
@@ -523,20 +567,32 @@ export default function ContractsPage() {
                   </Button>
                 </div>
 
-                <Button
-                  size="sm"
-                  variant="primary"
-                  onClick={() => {
-                    setLicenseContract(selectedContract);
-                    setSelectedContract(null);
-                    setDeviceId('');
-                    setGeneratedKey(null);
-                  }}
-                  className="bg-[#23169c] text-white hover:bg-[#1b1178] gap-1"
-                >
-                  <KeyRound className="h-3.5 w-3.5" />
-                  Issue POS Key
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => promptDeleteContract(selectedContract._id, selectedContract.businessName)}
+                    className="h-8 text-xs text-red-600 border-red-200 hover:bg-red-50 gap-1"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </Button>
+
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    onClick={() => {
+                      setLicenseContract(selectedContract);
+                      setSelectedContract(null);
+                      setDeviceId('');
+                      setGeneratedKey(null);
+                    }}
+                    className="bg-[#23169c] text-white hover:bg-[#1b1178] gap-1 h-8 text-xs"
+                  >
+                    <KeyRound className="h-3.5 w-3.5" />
+                    Issue POS Key
+                  </Button>
+                </div>
               </div>
             </div>
           )}
@@ -715,12 +771,12 @@ export default function ContractsPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">
-                  Duration (Years) *
+                  Duration (Months) *
                 </label>
                 <input
                   type="number"
                   min="1"
-                  max="10"
+                  max="120"
                   required
                   value={newDuration}
                   onChange={(e) => setNewDuration(Number(e.target.value))}
@@ -768,6 +824,55 @@ export default function ContractsPage() {
               </Button>
             </div>
           </form>
+        </Modal>
+
+        {/* Modal: Delete Contract Confirmation */}
+        <Modal
+          isOpen={!!contractToDelete}
+          onClose={() => !deleteLoading && setContractToDelete(null)}
+          title="Delete Contract Agreement"
+          className="max-w-md"
+        >
+          <div className="space-y-4">
+            <div className="flex items-start gap-3 p-3 rounded-xl bg-red-50 border border-red-100">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-100 text-red-600">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div className="text-xs text-slate-700 space-y-1">
+                <p className="font-semibold text-slate-900 text-sm">
+                  Are you sure you want to delete this contract?
+                </p>
+                <p>
+                  You are about to permanently delete the contract agreement for{' '}
+                  <strong className="text-slate-900 font-bold">{contractToDelete?.name}</strong>.
+                </p>
+                <p className="text-red-600 font-medium">
+                  This action cannot be undone and will remove all recorded agreement data.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={deleteLoading}
+                onClick={() => setContractToDelete(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={deleteLoading}
+                onClick={confirmDeleteContract}
+                className="bg-red-600 hover:bg-red-700 text-white gap-1.5"
+              >
+                <Trash2 className="h-4 w-4" />
+                {deleteLoading ? 'Deleting...' : 'Yes, Delete Contract'}
+              </Button>
+            </div>
+          </div>
         </Modal>
       </div>
     </DashboardLayout>
