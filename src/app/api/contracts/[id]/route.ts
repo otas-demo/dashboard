@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectToDatabase from '@/lib/mongodb';
 import Contract from '@/models/Contract';
+import { getAuthUser } from '@/lib/auth';
+import { expireOverdueContracts } from '@/lib/contracts';
+
+const CONTRACT_STATUSES = ['pending', 'active', 'expired', 'cancelled'];
 
 function corsResponse(response: NextResponse) {
   response.headers.set('Access-Control-Allow-Origin', '*');
@@ -19,8 +23,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = getAuthUser(req);
+    if (!auth) {
+      return corsResponse(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+    }
+
     const { id } = await params;
     await connectToDatabase();
+    await expireOverdueContracts();
     const contract = await Contract.findById(id).lean();
     if (!contract) {
       return corsResponse(NextResponse.json({ error: 'Contract not found' }, { status: 404 }));
@@ -38,9 +48,18 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = getAuthUser(req);
+    if (!auth) {
+      return corsResponse(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+    }
+
     const { id } = await params;
     const body = await req.json();
     const { status, notes, plan, duration } = body;
+
+    if (status && !CONTRACT_STATUSES.includes(String(status).toLowerCase())) {
+      return corsResponse(NextResponse.json({ error: 'Invalid contract status' }, { status: 400 }));
+    }
 
     await connectToDatabase();
     const contract = await Contract.findById(id);
@@ -68,6 +87,17 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = getAuthUser(req);
+    if (!auth) {
+      return corsResponse(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+    }
+
+    if (auth.role !== 'super_admin') {
+      return corsResponse(
+        NextResponse.json({ error: 'Access forbidden: Super Admin required' }, { status: 403 })
+      );
+    }
+
     const { id } = await params;
     await connectToDatabase();
     const deleted = await Contract.findByIdAndDelete(id);

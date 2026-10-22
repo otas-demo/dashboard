@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { DashboardLayout } from '@/components/DashboardLayout';
+import { DashboardLayout, useSession } from '@/components/DashboardLayout';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,9 +18,10 @@ import {
   CheckCircle2,
   Ban,
   RotateCcw,
+  ShieldAlert,
 } from 'lucide-react';
 
-export default function UsersManagementPage() {
+function UsersManagementPageContent() {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -113,7 +114,7 @@ export default function UsersManagementPage() {
   };
 
   return (
-    <DashboardLayout>
+    <>
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -143,7 +144,7 @@ export default function UsersManagementPage() {
 
           <CardContent className="p-0">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full min-w-[720px] text-left text-xs [&_td]:whitespace-nowrap [&_th]:whitespace-nowrap xl:[&_td]:whitespace-normal xl:[&_th]:whitespace-normal">
                 <thead className="bg-slate-50 text-slate-500 border-y border-slate-200 font-semibold uppercase tracking-wider">
                   <tr>
                     <th className="px-4 py-3">Account Name</th>
@@ -172,7 +173,8 @@ export default function UsersManagementPage() {
                       const displayName = u.name || u.username || 'User';
                       const displayEmail = u.email || (u.username ? `${u.username}@autoshop.com` : 'N/A');
                       const isSuper = u.role === 'super_admin' || u.role === 'admin';
-                      const isActive = u.status === 'active' || u.isActive;
+                      // `status` is authoritative (login checks it); `isActive` only for old records without one
+                      const isActive = u.status ? u.status === 'active' : u.isActive !== false;
 
                       return (
                         <tr key={u._id} className="hover:bg-slate-50/80 transition-colors">
@@ -325,6 +327,34 @@ export default function UsersManagementPage() {
           </form>
         </Modal>
       </div>
+    </>
+  );
+}
+
+function SuperAdminOnly({ children }: { children: React.ReactNode }) {
+  const { role } = useSession();
+  if (role !== 'super_admin') {
+    return (
+      <Card>
+        <CardContent className="p-8 text-center">
+          <ShieldAlert className="mx-auto h-8 w-8 text-red-500 mb-2" />
+          <h1 className="text-base font-bold text-slate-900">Super Admin access required</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Only Super Admins can manage staff accounts and roles.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+  return <>{children}</>;
+}
+
+export default function UsersManagementPage() {
+  return (
+    <DashboardLayout>
+      <SuperAdminOnly>
+        <UsersManagementPageContent />
+      </SuperAdminOnly>
     </DashboardLayout>
   );
 }

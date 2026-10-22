@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthUser } from '@/lib/auth';
+import { getAuthUser, normalizeRole } from '@/lib/auth';
 import connectToDatabase from '@/lib/mongodb';
 import User from '@/models/User';
 
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
         userId: user._id.toString(),
         name: user.name,
         email: user.email,
-        role: user.role,
+        role: normalizeRole(user.role),
       },
     });
   } catch (error: any) {

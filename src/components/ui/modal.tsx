@@ -31,7 +31,7 @@ export function Modal({ isOpen, onClose, title, description, children, className
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity"
@@ -41,7 +41,8 @@ export function Modal({ isOpen, onClose, title, description, children, className
       {/* Modal Dialog */}
       <div
         className={cn(
-          'relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl transition-all border border-slate-200 z-10 animate-in fade-in zoom-in-95 duration-150',
+          // max-h + overflow keep long forms scrollable on short phone screens
+          'relative w-full max-w-lg max-h-[calc(100dvh-1.5rem)] overflow-y-auto rounded-2xl bg-white p-4 sm:p-6 shadow-2xl transition-all border border-slate-200 z-10 animate-in fade-in zoom-in-95 duration-150',
           className
         )}
       >

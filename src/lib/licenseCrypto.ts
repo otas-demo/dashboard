@@ -1,4 +1,11 @@
-export const LICENSE_SALT = process.env.LICENSE_SALT || 'POS_OFFLINE_LICENSE_SEC_KEY_99812!';
+// Must be the exact salt compiled into the React Native POS app, or keys won't validate.
+function getLicenseSalt(): string {
+  const salt = process.env.LICENSE_SALT;
+  if (!salt) {
+    throw new Error('LICENSE_SALT environment variable is not set');
+  }
+  return salt;
+}
 
 /**
  * Standard SHA-256 implementation in pure TypeScript.
@@ -93,7 +100,7 @@ function sha256(ascii: string): string {
  */
 export function generateLicenseKey(cleanDeviceId: string): string {
   const norm = cleanDeviceId.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-  const rawHash = sha256(`SALT:${LICENSE_SALT}::DEV:${norm}`).toUpperCase();
+  const rawHash = sha256(`SALT:${getLicenseSalt()}::DEV:${norm}`).toUpperCase();
 
   const p1 = rawHash.substring(0, 4);
   const p2 = rawHash.substring(4, 8);

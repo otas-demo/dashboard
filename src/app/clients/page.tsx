@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { DashboardLayout } from '@/components/DashboardLayout';
+import { DashboardLayout, useSession } from '@/components/DashboardLayout';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -22,14 +22,16 @@ import {
   Database,
 } from 'lucide-react';
 
-export default function ClientsPage() {
+function ClientsPageContent() {
+  const isSuperAdmin = useSession().role === 'super_admin';
   const [clients, setClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [sourceFilter, setSourceFilter] = useState('ALL');
 
-  // New Client Modal
+  // New / Edit Client Modal (editingClientId is null when adding)
   const [isNewClientOpen, setIsNewClientOpen] = useState(false);
+  const [editingClientId, setEditingClientId] = useState<string | null>(null);
   const [shopName, setShopName] = useState('');
   const [ownerName, setOwnerName] = useState('');
   const [phone, setPhone] = useState('');
@@ -68,34 +70,46 @@ export default function ClientsPage() {
     fetchClients();
   }, [sourceFilter]);
 
-  const handleCreateClient = async (e: React.FormEvent) => {
+  const openClientModal = (client?: any) => {
+    setEditingClientId(client?._id ?? null);
+    setShopName(client?.shopName ?? '');
+    setOwnerName(client?.ownerName ?? '');
+    setPhone(client?.phone ?? '');
+    setEmail(client?.email ?? '');
+    setAddress(client?.address ?? '');
+    setNotes(client?.notes ?? '');
+    setIsNewClientOpen(true);
+  };
+
+  const handleSaveClient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!shopName || !ownerName || !phone) return;
 
     setClientModalLoading(true);
     try {
-      const res = await fetch('/api/clients', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          shopName,
-          ownerName,
-          phone,
-          email,
-          address,
-          notes,
-          source: 'manual',
-        }),
-      });
+      const res = editingClientId
+        ? await fetch(`/api/clients/${editingClientId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ shopName, ownerName, phone, email, address, notes }),
+          })
+        : await fetch('/api/clients', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              shopName,
+              ownerName,
+              phone,
+              email,
+              address,
+              notes,
+              source: 'manual',
+            }),
+          });
 
       if (res.ok) {
         setIsNewClientOpen(false);
-        setShopName('');
-        setOwnerName('');
-        setPhone('');
-        setEmail('');
-        setAddress('');
-        setNotes('');
+        setEditingClientId(null);
         fetchClients();
       } else {
         const d = await res.json();
@@ -145,6 +159,9 @@ export default function ClientsPage() {
       const res = await fetch(`/api/clients/${id}`, { method: 'DELETE' });
       if (res.ok) {
         fetchClients();
+      } else {
+        const d = await res.json();
+        alert(d.error || 'Failed to delete client');
       }
     } catch (err) {
       console.error(err);
@@ -152,7 +169,7 @@ export default function ClientsPage() {
   };
 
   return (
-    <DashboardLayout>
+    <>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -165,7 +182,7 @@ export default function ClientsPage() {
             </p>
           </div>
           <Button
-            onClick={() => setIsNewClientOpen(true)}
+            onClick={() => openClientModal()}
             className="gap-2 bg-[#23169c] hover:bg-[#1b1178] text-white"
           >
             <Plus className="h-4 w-4" />
@@ -218,7 +235,7 @@ export default function ClientsPage() {
 
           <CardContent className="p-0">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full min-w-[720px] text-left text-xs [&_td]:whitespace-nowrap [&_th]:whitespace-nowrap xl:[&_td]:whitespace-normal xl:[&_th]:whitespace-normal">
                 <thead className="bg-slate-50 text-slate-500 border-y border-slate-200 font-semibold uppercase tracking-wider">
                   <tr>
                     <th className="px-4 py-3">Shop / Business</th>
@@ -301,11 +318,23 @@ export default function ClientsPage() {
                             <Button
                               size="sm"
                               variant="ghost"
-                              onClick={() => deleteClient(c._id)}
-                              className="h-7 w-7 p-0 text-slate-400 hover:text-red-600"
+                              onClick={() => openClientModal(c)}
+                              className="h-7 w-7 p-0 text-slate-400 hover:text-[#23169c]"
+                              title="Edit client"
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
+                              <Edit2 className="h-3.5 w-3.5" />
                             </Button>
+                            {isSuperAdmin && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => deleteClient(c._id)}
+                                className="h-7 w-7 p-0 text-slate-400 hover:text-red-600"
+                                title="Delete client"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -321,10 +350,14 @@ export default function ClientsPage() {
         <Modal
           isOpen={isNewClientOpen}
           onClose={() => setIsNewClientOpen(false)}
-          title="Add New Client / Auto Shop"
-          description="Enter client contact details to save to your registry."
+          title={editingClientId ? 'Edit Client / Auto Shop' : 'Add New Client / Auto Shop'}
+          description={
+            editingClientId
+              ? 'Update the contact details saved in your registry.'
+              : 'Enter client contact details to save to your registry.'
+          }
         >
-          <form onSubmit={handleCreateClient} className="space-y-3.5">
+          <form onSubmit={handleSaveClient} className="space-y-3.5">
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">
                 Shop / Garage Name *
@@ -444,7 +477,7 @@ export default function ClientsPage() {
                   <Badge variant="success">Active</Badge>
                 </div>
                 <div className="flex items-center justify-between rounded-lg bg-white border border-emerald-200 p-3">
-                  <code className="font-mono text-base font-bold text-slate-900 tracking-widest">
+                  <code className="font-mono text-sm sm:text-base font-bold text-slate-900 tracking-wider sm:tracking-widest whitespace-nowrap">
                     {keyGenerated}
                   </code>
                   <Button
@@ -511,6 +544,14 @@ export default function ClientsPage() {
           )}
         </Modal>
       </div>
+    </>
+  );
+}
+
+export default function ClientsPage() {
+  return (
+    <DashboardLayout>
+      <ClientsPageContent />
     </DashboardLayout>
   );
 }

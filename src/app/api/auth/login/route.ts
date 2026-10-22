@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectToDatabase from '@/lib/mongodb';
 import User from '@/models/User';
-import { comparePassword, signToken, hashPassword } from '@/lib/auth';
+import { comparePassword, signToken, normalizeRole } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,20 +14,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
     }
 
-    // Auto-seed initial admin if database has 0 users
-    const userCount = await User.countDocuments();
-    if (userCount === 0) {
-      const defaultHashedPassword = await hashPassword('Admin@12345');
-      await User.create({
-        name: 'Super Admin',
-        email: 'admin@autoshop.com',
-        password: defaultHashedPassword,
-        role: 'super_admin',
-        status: 'active',
-      });
-      console.log('Seeded default super admin: admin@autoshop.com / Admin@12345');
-    }
-
+    // The first super admin is created with `npm run seed`, never from this route.
     const user = await User.findOne({ email: email.toLowerCase().trim() });
     if (!user) {
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
@@ -46,7 +33,7 @@ export async function POST(req: NextRequest) {
       userId: user._id.toString(),
       email: user.email || user.username || 'admin@autoshop.com',
       name: user.name || user.username || 'Admin',
-      role: ((user.role === 'admin' ? 'super_admin' : user.role) || 'staff') as any,
+      role: normalizeRole(user.role),
     };
 
     const token = signToken(tokenPayload);

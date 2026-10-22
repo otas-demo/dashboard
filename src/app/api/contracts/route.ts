@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectToDatabase from '@/lib/mongodb';
 import Contract from '@/models/Contract';
+import { getAuthUser } from '@/lib/auth';
+import { expireOverdueContracts } from '@/lib/contracts';
+import { escapeRegExp } from '@/lib/utils';
 
 // CORS response helper
 function corsResponse(response: NextResponse) {
@@ -15,9 +18,18 @@ export async function OPTIONS() {
   return corsResponse(response);
 }
 
+// Listing contracts requires a signed-in dashboard user.
+// POST stays public so the online e-sign form can submit agreements.
 export async function GET(req: NextRequest) {
   try {
+    const auth = getAuthUser(req);
+    if (!auth) {
+      return corsResponse(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+    }
+
     await connectToDatabase();
+    await expireOverdueContracts();
+
     const { searchParams } = new URL(req.url);
     const search = searchParams.get('search')?.trim();
     const status = searchParams.get('status')?.trim();
@@ -30,11 +42,11 @@ export async function GET(req: NextRequest) {
     }
 
     if (plan && plan !== 'ALL') {
-      query.plan = new RegExp(`^${plan}$`, 'i');
+      query.plan = new RegExp(`^${escapeRegExp(plan)}$`, 'i');
     }
 
     if (search) {
-      const regex = new RegExp(search, 'i');
+      const regex = new RegExp(escapeRegExp(search), 'i');
       query.$or = [
         { businessName: regex },
         { fullName: regex },
@@ -43,12 +55,17 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    const contracts = await Contract.find(query)
-      .sort({ createdAt: -1 })
-      .limit(300)
-      .lean();
+    const [contracts, total, active, pending] = await Promise.all([
+      Contract.find(query).sort({ createdAt: -1 }).limit(300).lean(),
+      Contract.countDocuments(),
+      Contract.countDocuments({ status: 'active' }),
+      Contract.countDocuments({ status: 'pending' }),
+    ]);
 
-    return corsResponse(NextResponse.json({ success: true, contracts }));
+    // counts are unfiltered totals so stat cards don't change with the filters
+    return corsResponse(
+      NextResponse.json({ success: true, contracts, counts: { total, active, pending } })
+    );
   } catch (error: any) {
     console.error('Fetch contracts error:', error);
     return corsResponse(

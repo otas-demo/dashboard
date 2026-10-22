@@ -29,7 +29,11 @@ export async function PATCH(
 
     if (name) user.name = name.trim();
     if (role && (role === 'super_admin' || role === 'staff')) user.role = role;
-    if (status && (status === 'active' || status === 'inactive')) user.status = status;
+    if (status && (status === 'active' || status === 'inactive')) {
+      user.status = status;
+      // keep the legacy flag in sync so older records display correctly
+      user.isActive = status === 'active';
+    }
     if (password) {
       user.password = await hashPassword(password);
     }

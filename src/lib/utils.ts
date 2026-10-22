@@ -33,4 +33,25 @@ export function formatDuration(duration: number | undefined): string {
   return `${num} ${num === 1 ? 'month' : 'months'}`;
 }
 
+/**
+ * Escapes user input so it can be used literally inside a RegExp
+ * (search boxes would otherwise throw on "(" or allow ReDoS patterns).
+ */
+export function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Contract end date = startDate + duration (months).
+ * Returns null when the start date cannot be parsed.
+ */
+export function getContractEndDate(startDate: string | undefined, duration: number | undefined): Date | null {
+  if (!startDate) return null;
+  const end = new Date(startDate);
+  if (isNaN(end.getTime())) return null;
+  const months = Number(duration) > 0 ? Number(duration) : 1;
+  end.setMonth(end.getMonth() + months);
+  return end;
+}
+
 

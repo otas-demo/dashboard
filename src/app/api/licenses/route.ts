@@ -3,6 +3,8 @@ import connectToDatabase from '@/lib/mongodb';
 import License from '@/models/License';
 import { getAuthUser } from '@/lib/auth';
 import { generateLicenseKey } from '@/lib/licenseCrypto';
+import { escapeRegExp } from '@/lib/utils';
+import Contract from '@/models/Contract';
 
 export async function GET(req: NextRequest) {
   try {
@@ -22,7 +24,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (search) {
-      const regex = new RegExp(search, 'i');
+      const regex = new RegExp(escapeRegExp(search), 'i');
       query.$or = [
         { deviceId: regex },
         { licenseKey: regex },
@@ -32,7 +34,8 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    const licenses = await License.find(query).sort({ createdAt: -1 }).limit(200).lean();
+    const limit = Math.min(Math.max(Number(searchParams.get('limit')) || 200, 1), 200);
+    const licenses = await License.find(query).sort({ createdAt: -1 }).limit(limit).lean();
     return NextResponse.json({ success: true, licenses });
   } catch (error: any) {
     console.error('Fetch licenses error:', error);
@@ -49,7 +52,7 @@ export async function POST(req: NextRequest) {
 
     await connectToDatabase();
     const body = await req.json();
-    const { deviceId, clientName, clientPhone, clientId, notes } = body;
+    const { deviceId, clientName, clientPhone, clientId, contractId, notes } = body;
 
     if (!deviceId || !deviceId.trim()) {
       return NextResponse.json({ error: 'Device ID is required' }, { status: 400 });
@@ -62,12 +65,18 @@ export async function POST(req: NextRequest) {
     const cleanDeviceId = deviceId.trim().toUpperCase();
     const generatedKey = generateLicenseKey(cleanDeviceId);
 
+    // Issuing a key for a pending agreement approves it
+    if (contractId) {
+      await Contract.updateOne({ _id: contractId, status: 'pending' }, { $set: { status: 'active' } });
+    }
+
     // Check if license already exists for this device ID
     let license = await License.findOne({ deviceId: cleanDeviceId });
     if (license) {
       license.clientName = clientName.trim();
       license.clientPhone = clientPhone?.trim() || license.clientPhone;
       if (clientId) license.clientId = clientId;
+      if (contractId) license.contractId = contractId;
       license.status = 'ACTIVE';
       license.licenseKey = generatedKey;
       license.generatedById = auth.userId as any;
@@ -88,6 +97,7 @@ export async function POST(req: NextRequest) {
       clientName: clientName.trim(),
       clientPhone: clientPhone?.trim() || '',
       clientId: clientId || undefined,
+      contractId: contractId || undefined,
       status: 'ACTIVE',
       generatedById: auth.userId,
       generatedByName: auth.name,

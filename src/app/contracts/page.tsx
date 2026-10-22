@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { DashboardLayout } from '@/components/DashboardLayout';
+import { DashboardLayout, useSession } from '@/components/DashboardLayout';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Modal } from '@/components/ui/modal';
-import { formatDate, formatDuration } from '@/lib/utils';
+import { formatDate, formatDuration, getContractEndDate } from '@/lib/utils';
 import {
   FileText,
   Search,
@@ -28,8 +28,10 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 
-export default function ContractsPage() {
+function ContractsPageContent() {
+  const isSuperAdmin = useSession().role === 'super_admin';
   const [contracts, setContracts] = useState<any[]>([]);
+  const [counts, setCounts] = useState({ total: 0, active: 0, pending: 0 });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -73,6 +75,7 @@ export default function ContractsPage() {
       if (res.ok) {
         const data = await res.json();
         setContracts(data.contracts || []);
+        if (data.counts) setCounts(data.counts);
       }
     } catch (err) {
       console.error('Fetch error:', err);
@@ -182,6 +185,7 @@ export default function ContractsPage() {
           deviceId: deviceId.trim().toUpperCase(),
           clientName: licenseContract.businessName,
           clientPhone: licenseContract.phoneNumber,
+          contractId: licenseContract._id,
           notes: `Contract Plan: ${licenseContract.plan.toUpperCase()} | Signer: ${licenseContract.fullName}`,
         }),
       });
@@ -189,6 +193,8 @@ export default function ContractsPage() {
       const data = await res.json();
       if (res.ok) {
         setGeneratedKey(data.license.licenseKey);
+        // a pending contract is activated when its key is issued
+        fetchContracts();
       } else {
         alert(data.error || 'Failed to issue key');
       }
@@ -199,12 +205,24 @@ export default function ContractsPage() {
     }
   };
 
-  const totalCount = contracts.length;
-  const activeCount = contracts.filter((c) => c.status === 'active').length;
-  const pendingCount = contracts.filter((c) => c.status === 'pending').length;
+  const { total: totalCount, active: activeCount, pending: pendingCount } = counts;
+
+  const statusBadgeVariant = (status: string) =>
+    status === 'active'
+      ? 'success'
+      : status === 'pending'
+      ? 'warning'
+      : status === 'expired'
+      ? 'default'
+      : 'destructive';
+
+  const formatEndDate = (c: any) => {
+    const end = getContractEndDate(c.startDate, c.duration);
+    return end ? end.toISOString().slice(0, 10) : 'N/A';
+  };
 
   return (
-    <DashboardLayout>
+    <>
       <div className="space-y-6">
         {/* Title Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -230,7 +248,7 @@ export default function ContractsPage() {
         {/* 3 Stat Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card>
-            <CardContent className="p-6 flex items-center justify-between">
+            <CardContent className="p-4 sm:p-6 flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                   Total Agreements
@@ -245,7 +263,7 @@ export default function ContractsPage() {
           </Card>
 
           <Card>
-            <CardContent className="p-6 flex items-center justify-between">
+            <CardContent className="p-4 sm:p-6 flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                   Active Subscriptions
@@ -260,7 +278,7 @@ export default function ContractsPage() {
           </Card>
 
           <Card>
-            <CardContent className="p-6 flex items-center justify-between">
+            <CardContent className="p-4 sm:p-6 flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                   Pending Approval
@@ -303,12 +321,12 @@ export default function ContractsPage() {
 
               <div className="flex flex-wrap items-center gap-2">
                 {/* Status Filter Tabs */}
-                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
-                  {['ALL', 'ACTIVE', 'PENDING', 'CANCELLED'].map((st) => (
+                <div className="flex max-w-full items-center gap-1 overflow-x-auto bg-slate-100 p-1 rounded-lg">
+                  {['ALL', 'ACTIVE', 'PENDING', 'EXPIRED', 'CANCELLED'].map((st) => (
                     <button
                       key={st}
                       onClick={() => setStatusFilter(st)}
-                      className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+                      className={`whitespace-nowrap px-3 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
                         statusFilter === st
                           ? 'bg-white text-[#23169c] shadow-xs'
                           : 'text-slate-600 hover:text-slate-900'
@@ -338,13 +356,13 @@ export default function ContractsPage() {
 
           <CardContent className="p-0">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full min-w-[720px] text-left text-xs [&_td]:whitespace-nowrap [&_th]:whitespace-nowrap xl:[&_td]:whitespace-normal xl:[&_th]:whitespace-normal">
                 <thead className="bg-slate-50 text-slate-500 border-y border-slate-200 font-semibold uppercase tracking-wider">
                   <tr>
                     <th className="px-4 py-3">Business / Shop</th>
                     <th className="px-4 py-3">Signer & Contact</th>
                     <th className="px-4 py-3">Plan & Duration</th>
-                    <th className="px-4 py-3">Start Date</th>
+                    <th className="px-4 py-3">Term</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
@@ -404,18 +422,12 @@ export default function ContractsPage() {
                             <Calendar className="h-3 w-3 text-slate-400" />
                             <span>{c.startDate}</span>
                           </div>
+                          <div className="text-[11px] text-slate-400 mt-0.5 pl-4">
+                            ends {formatEndDate(c)}
+                          </div>
                         </td>
                         <td className="px-4 py-3">
-                          <Badge
-                            variant={
-                              c.status === 'active'
-                                ? 'success'
-                                : c.status === 'pending'
-                                ? 'warning'
-                                : 'destructive'
-                            }
-                            className="capitalize"
-                          >
+                          <Badge variant={statusBadgeVariant(c.status)} className="capitalize">
                             {c.status}
                           </Badge>
                         </td>
@@ -447,15 +459,17 @@ export default function ContractsPage() {
                               POS Key
                             </Button>
 
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => promptDeleteContract(c._id, c.businessName)}
-                              className="h-7 w-7 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50"
-                              title="Delete contract agreement"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
+                            {isSuperAdmin && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => promptDeleteContract(c._id, c.businessName)}
+                                className="h-7 w-7 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50"
+                                title="Delete contract agreement"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -495,22 +509,15 @@ export default function ContractsPage() {
                   <span className="font-bold text-[#23169c] uppercase">{selectedContract.plan} ({formatDuration(selectedContract.duration)})</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block text-[10px] uppercase font-semibold">Start Date</span>
-                  <span className="text-slate-800 font-medium">{selectedContract.startDate}</span>
+                  <span className="text-slate-400 block text-[10px] uppercase font-semibold">Term</span>
+                  <span className="text-slate-800 font-medium">
+                    {selectedContract.startDate} → {formatEndDate(selectedContract)}
+                  </span>
                 </div>
                 <div>
                   <span className="text-slate-400 block text-[10px] uppercase font-semibold">Agreement Status</span>
                   <div className="mt-0.5">
-                    <Badge
-                      variant={
-                        selectedContract.status === 'active'
-                          ? 'success'
-                          : selectedContract.status === 'pending'
-                          ? 'warning'
-                          : 'destructive'
-                      }
-                      className="capitalize"
-                    >
+                    <Badge variant={statusBadgeVariant(selectedContract.status)} className="capitalize">
                       {selectedContract.status}
                     </Badge>
                   </div>
@@ -538,8 +545,8 @@ export default function ContractsPage() {
               </div>
 
               {/* Status Toggle Action */}
-              <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
+              <div className="pt-2 border-t border-slate-100 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap items-center gap-1.5">
                   <span className="text-slate-500 font-medium">Change Status:</span>
                   <Button
                     size="sm"
@@ -567,16 +574,18 @@ export default function ContractsPage() {
                   </Button>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => promptDeleteContract(selectedContract._id, selectedContract.businessName)}
-                    className="h-8 text-xs text-red-600 border-red-200 hover:bg-red-50 gap-1"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Delete
-                  </Button>
+                <div className="flex items-center justify-end gap-2">
+                  {isSuperAdmin && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => promptDeleteContract(selectedContract._id, selectedContract.businessName)}
+                      className="h-8 text-xs text-red-600 border-red-200 hover:bg-red-50 gap-1"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </Button>
+                  )}
 
                   <Button
                     size="sm"
@@ -615,7 +624,7 @@ export default function ContractsPage() {
                   <Badge variant="success">Active</Badge>
                 </div>
                 <div className="flex items-center justify-between rounded-lg bg-white border border-emerald-200 p-3">
-                  <code className="font-mono text-base font-bold text-slate-900 tracking-widest">
+                  <code className="font-mono text-sm sm:text-base font-bold text-slate-900 tracking-wider sm:tracking-widest whitespace-nowrap">
                     {generatedKey}
                   </code>
                   <Button
@@ -659,7 +668,7 @@ export default function ContractsPage() {
               <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600 space-y-1">
                 <p>Shop: <strong className="text-slate-800">{licenseContract?.businessName}</strong></p>
                 <p>Signer: {licenseContract?.fullName} | Phone: {licenseContract?.phoneNumber}</p>
-                <p>Subscription: <span className="font-semibold text-[#23169c]">{licenseContract?.plan?.toUpperCase()}</span> ({licenseContract?.duration} Year)</p>
+                <p>Subscription: <span className="font-semibold text-[#23169c]">{licenseContract?.plan?.toUpperCase()}</span> ({formatDuration(licenseContract?.duration)})</p>
               </div>
 
               <div className="pt-2 flex justify-end gap-2">
@@ -875,6 +884,14 @@ export default function ContractsPage() {
           </div>
         </Modal>
       </div>
+    </>
+  );
+}
+
+export default function ContractsPage() {
+  return (
+    <DashboardLayout>
+      <ContractsPageContent />
     </DashboardLayout>
   );
 }

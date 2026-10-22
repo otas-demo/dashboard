@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectToDatabase from '@/lib/mongodb';
 import Client from '@/models/Client';
 import { getAuthUser } from '@/lib/auth';
+import { escapeRegExp } from '@/lib/utils';
 
 export async function GET(req: NextRequest) {
   try {
@@ -21,7 +22,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (search) {
-      const regex = new RegExp(search, 'i');
+      const regex = new RegExp(escapeRegExp(search), 'i');
       query.$or = [
         { shopName: regex },
         { ownerName: regex },

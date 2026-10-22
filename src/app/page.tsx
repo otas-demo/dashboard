@@ -20,46 +20,27 @@ export default function DashboardPage() {
     activeLicenses: 0,
     totalContracts: 0,
     activeContracts: 0,
+    totalClients: 0,
   });
 
-  const [clients, setClients] = useState<any[]>([]);
   const [recentLicenses, setRecentLicenses] = useState<any[]>([]);
 
   // Fetch stats & recent licenses
   const refreshData = async () => {
     try {
-      const [licRes, clientRes, contractRes] = await Promise.all([
-        fetch('/api/licenses'),
-        fetch('/api/clients'),
-        fetch('/api/contracts'),
+      const [statsRes, licRes] = await Promise.all([
+        fetch('/api/stats'),
+        fetch('/api/licenses?limit=10'),
       ]);
+
+      if (statsRes.ok) {
+        const data = await statsRes.json();
+        setStats(data.stats);
+      }
 
       if (licRes.ok) {
         const licData = await licRes.json();
-        const licList = licData.licenses || [];
-        setRecentLicenses(licList.slice(0, 10));
-        const activeCount = licList.filter((l: any) => l.status === 'ACTIVE').length;
-        setStats((prev) => ({
-          ...prev,
-          totalLicenses: licList.length,
-          activeLicenses: activeCount,
-        }));
-      }
-
-      if (clientRes.ok) {
-        const cData = await clientRes.json();
-        setClients(cData.clients || []);
-      }
-
-      if (contractRes.ok) {
-        const conData = await contractRes.json();
-        const conList = conData.contracts || [];
-        const activeCon = conList.filter((c: any) => c.status === 'active').length;
-        setStats((prev) => ({
-          ...prev,
-          totalContracts: conList.length,
-          activeContracts: activeCon,
-        }));
+        setRecentLicenses(licData.licenses || []);
       }
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
@@ -86,7 +67,7 @@ export default function DashboardPage() {
         {/* 4 Stat Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
-            <CardContent className="p-6 flex items-center justify-between">
+            <CardContent className="p-4 sm:p-6 flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                   Total Keys
@@ -103,7 +84,7 @@ export default function DashboardPage() {
           </Card>
 
           <Card>
-            <CardContent className="p-6 flex items-center justify-between">
+            <CardContent className="p-4 sm:p-6 flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                   Active Devices
@@ -120,7 +101,7 @@ export default function DashboardPage() {
           </Card>
 
           <Card>
-            <CardContent className="p-6 flex items-center justify-between">
+            <CardContent className="p-4 sm:p-6 flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                   Signed Contracts
@@ -137,15 +118,15 @@ export default function DashboardPage() {
           </Card>
 
           <Card>
-            <CardContent className="p-6 flex items-center justify-between">
+            <CardContent className="p-4 sm:p-6 flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                   Total Clients
                 </p>
                 <h3 className="text-2xl font-black text-[#23169c] mt-1">
-                  {stats.totalContracts + clients.length}
+                  {stats.totalClients}
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">Combined directory</p>
+                <p className="text-xs text-slate-400 mt-0.5">Unique shops (clients + contracts)</p>
               </div>
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#edeafc] text-[#23169c]">
                 <Users className="h-6 w-6" />
@@ -173,7 +154,7 @@ export default function DashboardPage() {
 
           <CardContent className="p-0">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full min-w-[640px] text-left text-xs [&_td]:whitespace-nowrap [&_th]:whitespace-nowrap xl:[&_td]:whitespace-normal xl:[&_th]:whitespace-normal">
                 <thead className="bg-slate-50 text-slate-500 border-y border-slate-200 font-semibold uppercase tracking-wider">
                   <tr>
                     <th className="px-5 py-3">Client / Shop</th>

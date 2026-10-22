@@ -5,7 +5,12 @@ try {
   dns.setServers(['8.8.8.8', '1.1.1.1']);
 } catch (e) {}
 
-const ATLAS_URI = 'mongodb+srv://acehidan:123456ace@autoshopcrm.4swoana.mongodb.net/?retryWrites=true&w=majority';
+// Loaded from .env / .env.local by `npm run migrate:crm`
+const ATLAS_URI = process.env.MONGODB_URI;
+if (!ATLAS_URI) {
+  console.error('MONGODB_URI is not set. Add it to .env.local or the environment.');
+  process.exit(1);
+}
 
 async function run() {
   console.log('Connecting to Atlas Cluster...');

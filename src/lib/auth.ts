@@ -3,13 +3,27 @@ import bcrypt from 'bcryptjs';
 import { NextRequest } from 'next/server';
 import { UserRole } from '@/models/User';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'autoshop_pos_dashboard_jwt_secret_2026_super_secure!';
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET environment variable is not set');
+  }
+  return secret;
+}
 
 export interface TokenPayload {
   userId: string;
   email: string;
   name: string;
   role: UserRole;
+}
+
+/**
+ * Collapses legacy roles onto the two the dashboard understands:
+ * old 'admin' accounts are super admins, anything else is staff.
+ */
+export function normalizeRole(role: string | undefined): 'super_admin' | 'staff' {
+  return role === 'super_admin' || role === 'admin' ? 'super_admin' : 'staff';
 }
 
 export function hashPassword(plainText: string): Promise<string> {
@@ -21,12 +35,14 @@ export function comparePassword(plainText: string, hashed: string): Promise<bool
 }
 
 export function signToken(payload: TokenPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: '7d' });
 }
 
 export function verifyToken(token: string): TokenPayload | null {
+  // read outside the try so a missing secret surfaces as an error, not as "logged out"
+  const secret = getJwtSecret();
   try {
-    return jwt.verify(token, JWT_SECRET) as TokenPayload;
+    return jwt.verify(token, secret) as TokenPayload;
   } catch {
     return null;
   }
