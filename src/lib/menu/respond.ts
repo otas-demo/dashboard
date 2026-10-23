@@ -1,6 +1,7 @@
 import { getLastGoodMenu, getMenu } from '@/lib/menu/data';
 import { renderMenuPage } from '@/lib/menu/render';
 import type { MenuPageKey } from '@/lib/menu/templates';
+import type { MenuData } from '@/lib/menu/types';
 
 const HTML_HEADERS = {
   'Content-Type': 'text/html; charset=utf-8',
@@ -20,21 +21,32 @@ function rejectAfter(ms: number): Promise<never> {
   return new Promise((_, reject) => setTimeout(() => reject(new Error(`Menu load timed out after ${ms}ms`)), ms));
 }
 
-/** Public, login-free HTML response for one menu page. */
-export async function menuPageResponse(key: MenuPageKey): Promise<Response> {
+/**
+ * The menu for public pages and the public API. If the database is slow or down, returns
+ * the last menu this server loaded; throws only when there is none. Never returns the
+ * built-in defaults as a fallback: customers must not see outdated numbers.
+ */
+export async function loadPublicMenu(): Promise<MenuData> {
   try {
     // Without a remembered menu there is nothing to fall back to, so wait for the database
     // (bounded by the connection timeout) rather than failing a slow first connection.
     const load = getMenu();
     const { data } = await (getLastGoodMenu() ? Promise.race([load, rejectAfter(FALLBACK_AFTER_MS)]) : load);
-    return new Response(renderMenuPage(key, data), { headers: HTML_HEADERS });
+    return data;
   } catch (error) {
     const fallback = getLastGoodMenu();
-    if (fallback) {
-      console.warn(`Menu page "${key}" failed to load from DB, serving lastGoodMenu:`, error);
-      return new Response(renderMenuPage(key, fallback), { headers: HTML_HEADERS });
-    }
-    // never fall back to built-in prices here: customers must not see outdated numbers
+    if (!fallback) throw error;
+    console.warn('Menu failed to load from DB, serving lastGoodMenu:', error);
+    return fallback;
+  }
+}
+
+/** Public, login-free HTML response for one menu page. */
+export async function menuPageResponse(key: MenuPageKey): Promise<Response> {
+  try {
+    const data = await loadPublicMenu();
+    return new Response(renderMenuPage(key, data), { headers: HTML_HEADERS });
+  } catch (error) {
     console.error(`Menu page "${key}" failed:`, error);
     return new Response(UNAVAILABLE_PAGE, { status: 503, headers: HTML_HEADERS });
   }

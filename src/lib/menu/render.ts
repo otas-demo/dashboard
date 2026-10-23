@@ -32,22 +32,34 @@ function publicCustomData(custom: CustomData, priceDate: string) {
   return { version: priceDate, ...custom, cats };
 }
 
-function hardwareIndexCard(it: MenuHardwareItem): string {
+/** Where generated links and built-in images point. */
+export interface RenderOptions {
+  linkBase: string; // '/menu' on the dashboard, '' on the standalone menu site
+  assetBase: string; // replaces '/menu-assets/' at the start of built-in image paths
+}
+
+const DASHBOARD_RENDER: RenderOptions = { linkBase: '/menu', assetBase: '/menu-assets/' };
+
+function imageSrc(src: string, o: RenderOptions): string {
+  return src.startsWith('/menu-assets/') ? o.assetBase + src.slice('/menu-assets/'.length) : src;
+}
+
+function hardwareIndexCard(it: MenuHardwareItem, o: RenderOptions): string {
   const sample = it.samplePhoto ? '<span class="sample">နမူနာပုံ</span>' : '';
   return `
-      <a class="hw-card" href="/menu/hardware#${esc(it.slug)}">
-        <div class="ph">${sample}<img src="${esc(it.image)}" alt="${esc(it.name)}" width="360" height="360"></div>
+      <a class="hw-card" href="${o.linkBase}/hardware#${esc(it.slug)}">
+        <div class="ph">${sample}<img src="${esc(imageSrc(it.image, o))}" alt="${esc(it.name)}" width="360" height="360"></div>
         <div class="hw-body"><span class="hw-name">${esc(it.name)}</span><span class="hw-spec">${esc(it.spec)}</span>
           <span class="hw-price">${kyat(it.price)}<small>ကျပ်</small></span></div>
       </a>`;
 }
 
-function hardwareDetailCard(it: MenuHardwareItem): string {
+function hardwareDetailCard(it: MenuHardwareItem, o: RenderOptions): string {
   const sample = it.samplePhoto ? '<span class="sample">နမူနာပုံ</span>' : '';
   const best = it.bestFor ? `\n            <span class="best">${esc(it.bestFor)}</span>` : '';
   return `
         <article class="hw-card" id="${esc(it.slug)}">
-          <div class="ph">${sample}<img src="${esc(it.image)}" alt="${esc(it.name)}" width="360" height="360"></div>
+          <div class="ph">${sample}<img src="${esc(imageSrc(it.image, o))}" alt="${esc(it.name)}" width="360" height="360"></div>
           <div class="hw-body"><h4 class="hw-name">${esc(it.name)}</h4><span class="hw-spec">${esc(it.spec)}</span>${best}
             <span class="hw-price">${kyat(it.price)}<small>ကျပ်</small></span></div>
         </article>`;
@@ -71,7 +83,7 @@ function commonValues(data: MenuData): Record<string, string> {
   };
 }
 
-function pageValues(key: MenuPageKey, data: MenuData): Record<string, string> {
+function pageValues(key: MenuPageKey, data: MenuData, o: RenderOptions): Record<string, string> {
   const base = customBasePrice(data.custom);
   switch (key) {
     case 'index': {
@@ -84,7 +96,7 @@ function pageValues(key: MenuPageKey, data: MenuData): Record<string, string> {
         aiRows: visibleAi
           .map(
             (c) => `
-      <a class="ai-row" href="/menu/ai-${c.id}">
+      <a class="ai-row" href="${o.linkBase}/ai-${c.id}">
         <span class="ai-name"><span class="ic">${CHAT_ICON}</span><span><b>${esc(c.name)}</b><small>${esc(c.subtitle)}</small></span></span>
         <span class="ai-val" data-l="တပ်ဆင်ခ">${lakh(c.setupFee)} သိန်း</span>
         <span class="ai-val" data-l="ကြာချိန်">${esc(c.wait)}</span>
@@ -92,7 +104,7 @@ function pageValues(key: MenuPageKey, data: MenuData): Record<string, string> {
       </a>`
           )
           .join(''),
-        hwCards: visibleHw.map(hardwareIndexCard).join(''),
+        hwCards: visibleHw.map((h) => hardwareIndexCard(h, o)).join(''),
       };
     }
     case 'commercial':
@@ -117,7 +129,7 @@ function pageValues(key: MenuPageKey, data: MenuData): Record<string, string> {
         hwGroups: groups
           .map(
             (g) =>
-              `<div class="hw-group"><h3>${esc(g.name)}<small>${esc(g.blurb)}</small></h3><div class="hwd">${g.items.map(hardwareDetailCard).join('')}</div></div>`
+              `<div class="hw-group"><h3>${esc(g.name)}<small>${esc(g.blurb)}</small></h3><div class="hwd">${g.items.map((h) => hardwareDetailCard(h, o)).join('')}</div></div>`
           )
           .join(''),
       };
@@ -139,9 +151,18 @@ function pageValues(key: MenuPageKey, data: MenuData): Record<string, string> {
   }
 }
 
+/**
+ * The filled-in values for one page, keyed like the template placeholders.
+ * Text is already HTML-escaped; aiRows / hwCards / hwGroups are HTML blocks;
+ * customDataJson is the calculator data as JSON.
+ */
+export function menuPageValues(key: MenuPageKey, data: MenuData, o: RenderOptions = DASHBOARD_RENDER): Record<string, string> {
+  return { ...commonValues(data), ...pageValues(key, data, o) };
+}
+
 /** Full HTML document for one public menu page. */
 export function renderMenuPage(key: MenuPageKey, data: MenuData): string {
-  const values = { ...commonValues(data), ...pageValues(key, data) };
+  const values = menuPageValues(key, data);
   return MENU_TEMPLATES[key].replace(/\{\{(\w+)\}\}/g, (_, name: string) => {
     if (!(name in values)) throw new Error(`Menu template "${key}" has no value for {{${name}}}`);
     return values[name];
