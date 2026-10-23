@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectToDatabase from '@/lib/mongodb';
 import MenuSettings from '@/models/MenuSettings';
 import { getAuthUser } from '@/lib/auth';
-import { getMenu } from '@/lib/menu/data';
+import { getMenu, setLastGoodMenu } from '@/lib/menu/data';
 import { MenuValidationError, validateMenuUpdate } from '@/lib/menu/validate';
 import { isR2Configured } from '@/lib/r2';
 
@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const menu = await getMenu();
+    const menu = await getMenu({ allowMigrationFallback: true });
     return NextResponse.json({ success: true, ...menu, uploadsEnabled: isR2Configured() });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Failed to load menu' }, { status: 500 });
@@ -32,7 +32,7 @@ export async function PUT(req: NextRequest) {
     }
 
     const body = await req.json();
-    const current = await getMenu();
+    const current = await getMenu({ allowMigrationFallback: true });
     const data = validateMenuUpdate(body.data, current.data);
 
     await connectToDatabase();
@@ -42,11 +42,14 @@ export async function PUT(req: NextRequest) {
       { upsert: true, returnDocument: 'after' }
     ).lean();
 
+    setLastGoodMenu(saved!.data);
+
     return NextResponse.json({
       success: true,
       data: saved!.data,
       updatedAt: saved!.updatedAt,
       updatedByName: saved!.updatedByName,
+      migrated: false,
     });
   } catch (error: any) {
     if (error instanceof MenuValidationError) {

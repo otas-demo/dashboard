@@ -22,6 +22,11 @@ export function autoPrice(amount: number): string {
   return amount >= 100000 && amount % 100000 === 0 ? `${lakh(amount)} သိန်း` : `${kyat(amount)} ကျပ်`;
 }
 
+/** Whole lakh amounts read as "၇ သိန်းမှ", anything else as "၉၅,၀၀၀ မှ". */
+export function monthlyFrom(amount: number): string {
+  return amount >= 100000 && amount % 100000 === 0 ? `${lakh(amount)} သိန်းမှ` : `${kyat(amount)} မှ`;
+}
+
 /** Same rule as custom.js priceOf(): days × rate, rounded to `round`. */
 export function customPriceOfDays(days: number, rate: number, round: number): number {
   return Math.round((days * rate) / round) * round;

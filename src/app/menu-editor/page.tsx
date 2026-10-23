@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Modal } from '@/components/ui/modal';
 import { cn, formatDate } from '@/lib/utils';
-import { autoPrice, customPriceOfDays, kyat, lakh } from '@/lib/menu/format';
+import { customPriceOfDays, kyat, lakh, monthlyFrom } from '@/lib/menu/format';
 import { HARDWARE_CATEGORIES, type MenuData, type MenuHardwareItem } from '@/lib/menu/types';
 import {
   Check,
@@ -31,6 +31,8 @@ const TABS = ['General', 'Packages', 'AI Order', 'Hardware', 'Custom POS'] as co
 type Tab = (typeof TABS)[number];
 
 const BUILT_IN_IMAGES = [
+  'redmi-pad-2-97-wifi.webp',
+  'redmi-pad-2-97-4g.webp',
   'redmi-pad-2.webp',
   'ns03-portable-58.webp',
   'ns06-portable-80.webp',
@@ -155,9 +157,8 @@ const EMPTY_ITEM: MenuHardwareItem = {
   slug: '',
   category: HARDWARE_CATEGORIES[0].name,
   name: '',
-  variant: '',
-  points: [],
-  fit: '',
+  spec: '',
+  bestFor: '',
   price: 0,
   image: BUILT_IN_IMAGES[0],
   samplePhoto: false,
@@ -180,7 +181,6 @@ function HardwareItemModal({
   onSave: (item: MenuHardwareItem) => void;
 }) {
   const [form, setForm] = useState(item);
-  const [pointsText, setPointsText] = useState(item.points.join('\n'));
   const [slugTouched, setSlugTouched] = useState(!isNew);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
@@ -219,10 +219,6 @@ function HardwareItemModal({
     onSave({
       ...form,
       slug,
-      points: pointsText
-        .split('\n')
-        .map((p) => p.trim())
-        .filter(Boolean),
     });
   };
 
@@ -258,14 +254,9 @@ function HardwareItemModal({
           </div>
         </div>
 
-        <TextField label="Short description" value={form.variant} onChange={(v) => set('variant', v)} disabled={false} placeholder="e.g. Wi-Fi · RAM 4GB · 64GB" />
+        <TextField label="Spec" value={form.spec} onChange={(v) => set('spec', v)} disabled={false} placeholder="e.g. ၉.၇ လက်မ · 4GB / 64GB · Wi-Fi" />
 
-        <div>
-          <label className={labelClass}>Bullet points (one per line)</label>
-          <textarea value={pointsText} onChange={(e) => setPointsText(e.target.value)} rows={3} className={inputClass} />
-        </div>
-
-        <TextField label="Suits which shops (ကိုက်တဲ့ဆိုင်)" value={form.fit} onChange={(v) => set('fit', v)} disabled={false} />
+        <TextField label="Best for" value={form.bestFor} onChange={(v) => set('bestFor', v)} disabled={false} placeholder="ဥပမာ Wi-Fi ရှိတဲ့ ကောင်တာ" />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <MoneyField label="Price *" value={form.price} onChange={(v) => set('price', v)} disabled={false} />
@@ -354,6 +345,7 @@ function MenuEditorContent() {
 
   const [draft, setDraft] = useState<MenuData | null>(null);
   const [savedJson, setSavedJson] = useState('');
+  const [migrated, setMigrated] = useState(false);
   const [meta, setMeta] = useState<{ updatedAt: string | null; updatedByName: string | null }>({ updatedAt: null, updatedByName: null });
   const [uploadsEnabled, setUploadsEnabled] = useState(false);
   const [loadError, setLoadError] = useState('');
@@ -364,7 +356,9 @@ function MenuEditorContent() {
   const [tab, setTab] = useState<Tab>('General');
   const [editing, setEditing] = useState<{ index: number | null; item: MenuHardwareItem } | null>(null);
 
-  const dirty = draft !== null && JSON.stringify(draft) !== savedJson;
+  // only super admins can save, so only they are asked to save a migrated menu
+  const needsMigrationSave = migrated && isSuperAdmin;
+  const dirty = draft !== null && (needsMigrationSave || JSON.stringify(draft) !== savedJson);
 
   useEffect(() => {
     async function load() {
@@ -374,6 +368,7 @@ function MenuEditorContent() {
         if (!res.ok) throw new Error(data.error || 'Failed to load menu');
         setDraft(data.data);
         setSavedJson(JSON.stringify(data.data));
+        setMigrated(Boolean(data.migrated));
         setMeta({ updatedAt: data.updatedAt, updatedByName: data.updatedByName });
         setUploadsEnabled(data.uploadsEnabled);
       } catch (err: any) {
@@ -409,6 +404,7 @@ function MenuEditorContent() {
       if (!res.ok) throw new Error(data.error || 'Failed to save');
       setDraft(data.data);
       setSavedJson(JSON.stringify(data.data));
+      setMigrated(false);
       setMeta({ updatedAt: data.updatedAt, updatedByName: data.updatedByName });
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2500);
@@ -491,7 +487,13 @@ function MenuEditorContent() {
           View only — a Super Admin can change menu prices.
         </div>
       )}
-      {dirty && (
+      {needsMigrationSave && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-medium text-amber-800">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          The menu was updated to the new design. Review the prices and press Save.
+        </div>
+      )}
+      {dirty && !needsMigrationSave && (
         <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-medium text-amber-800">
           <AlertTriangle className="h-4 w-4" />
           You have unsaved changes. Customers still see the last saved menu.
@@ -596,7 +598,9 @@ function MenuEditorContent() {
                 <CardHeader className="flex-row items-center justify-between space-y-0">
                   <div>
                     <CardTitle className="text-base">{c.name}</CardTitle>
-                    <CardDescription>/menu/ai-{c.id}</CardDescription>
+                    <CardDescription>
+                      {c.subtitle} · /menu/ai-{c.id}
+                    </CardDescription>
                   </div>
                   <VisibleToggle visible={c.visible} onChange={(v) => setChannel({ visible: v })} disabled={readOnly} />
                 </CardHeader>
@@ -614,7 +618,7 @@ function MenuEditorContent() {
                     value={c.monthlyFrom}
                     onChange={(v) => setChannel({ monthlyFrom: v })}
                     disabled={readOnly}
-                    preview={(v) => `${autoPrice(v)}မှ`}
+                    preview={(v) => monthlyFrom(v)}
                   />
                   {c.inboxOnlyFee !== null && (
                     <MoneyField
@@ -626,7 +630,6 @@ function MenuEditorContent() {
                     />
                   )}
                   <TextField label="Waiting time" value={c.wait} onChange={(v) => setChannel({ wait: v })} disabled={readOnly} placeholder="၁–၂ ပတ်" />
-                  <TextField label="Setup note (index card)" value={c.setupNote} onChange={(v) => setChannel({ setupNote: v })} disabled={readOnly} />
                 </CardContent>
               </Card>
             );

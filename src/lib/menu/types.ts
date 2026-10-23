@@ -2,7 +2,7 @@
 // All money values are whole kyat.
 
 export interface MenuGeneral {
-  priceDate: string; // shown as "ဈေးနှုန်းစာရင်း <priceDate>"
+  priceDate: string; // shown as "ဈေးနှုန်း <priceDate>"
   phone: string;
   email: string;
   website: string; // full https:// URL
@@ -20,7 +20,6 @@ export interface MenuAiChannel {
   name: string;
   subtitle: string;
   setupFee: number;
-  setupNote: string;
   wait: string; // e.g. "၁–၂ ပတ်"
   monthlyFrom: number;
   inboxOnlyFee: number | null; // Viber only: Staff Inbox without AI
@@ -29,14 +28,13 @@ export interface MenuAiChannel {
 
 export interface MenuHardwareItem {
   slug: string;
-  category: string; // one of HARDWARE_CATEGORIES
+  category: string; // one of HARDWARE_CATEGORIES[].name
   name: string;
-  variant: string;
-  points: string[];
-  fit: string;
+  spec: string;
+  bestFor: string; // short line, <span class="best">
   price: number;
   image: string; // /menu-assets/... or an https:// R2 URL
-  samplePhoto: boolean; // shows "ပုံသည် နမူနာပုံ"
+  samplePhoto: boolean; // shows "နမူနာပုံ"
   visible: boolean;
 }
 
@@ -50,6 +48,9 @@ export interface CustomFeature {
   points?: string[];
   eg?: string;
   monthly?: string;
+  fit?: string[];
+  when?: string[];
+  note?: string;
   option?: { label: string; short: string; price: number; days: number; monthly?: string };
   qty?: { max: number; per: string };
   quote?: boolean;
@@ -74,6 +75,7 @@ export interface CustomData {
 }
 
 export interface MenuData {
+  schemaVersion: 2;
   general: MenuGeneral;
   packages: MenuPackages;
   aiChannels: MenuAiChannel[];
@@ -83,6 +85,6 @@ export interface MenuData {
 
 export const HARDWARE_CATEGORIES = [
   { name: 'Tablet', blurb: 'Auto Shop ကို ဖွင့်သုံးမယ့် စက်' },
-  { name: 'Thermal Printer', blurb: 'ဘောင်ချာ၊ sticker ထုတ်တဲ့ စက်' },
-  { name: 'Barcode Scanner', blurb: 'ပစ္စည်း barcode ဖတ်တဲ့ စက်' },
+  { name: 'Thermal Printer', blurb: 'ဘောင်ချာ ထုတ်စက်' },
+  { name: 'Barcode Scanner', blurb: 'Barcode ဖတ်စက်' },
 ] as const;

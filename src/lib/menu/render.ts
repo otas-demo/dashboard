@@ -1,5 +1,5 @@
 import { MENU_TEMPLATES, type MenuPageKey } from '@/lib/menu/templates';
-import { autoPrice, customPriceOfDays, kyat, lakh, mm } from '@/lib/menu/format';
+import { customPriceOfDays, kyat, lakh, mm, monthlyFrom } from '@/lib/menu/format';
 import { HARDWARE_CATEGORIES, type CustomData, type MenuData, type MenuHardwareItem } from '@/lib/menu/types';
 
 function esc(value: string): string {
@@ -10,13 +10,6 @@ const CHAT_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12.5h5"/></svg>';
 const ARROW_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
-
-// The first and last payment instalments (60% / 40%) used on the AI pages.
-const AI_PAYMENT_SPLIT = [60, 40] as const;
-
-function minOf(values: number[]): number | null {
-  return values.length ? Math.min(...values) : null;
-}
 
 function customBasePrice(custom: CustomData): number {
   return customPriceOfDays(custom.base.days, custom.rate, custom.round);
@@ -40,33 +33,23 @@ function publicCustomData(custom: CustomData, priceDate: string) {
 }
 
 function hardwareIndexCard(it: MenuHardwareItem): string {
+  const sample = it.samplePhoto ? '<span class="sample">နမူနာပုံ</span>' : '';
   return `
-      <a class="card-link hw-card" href="/menu/hardware#${esc(it.slug)}">
-        <div class="hw-ph"><img src="${esc(it.image)}" alt="${esc(it.name)}" loading="lazy" width="360" height="360"></div>
-        <div class="hw-body">
-          <span class="hw-cat">${esc(it.category)}</span>
-          <span class="hw-name">${esc(it.name)}</span>
-          <span class="hw-var">${esc(it.variant)}</span>
-          ${it.samplePhoto ? '<span class="rep">ပုံသည် နမူနာပုံ</span>' : ''}
-          <span class="hw-price">${kyat(it.price)}<small>ကျပ်</small></span>
-        </div>
+      <a class="hw-card" href="/menu/hardware#${esc(it.slug)}">
+        <div class="ph">${sample}<img src="${esc(it.image)}" alt="${esc(it.name)}" width="360" height="360"></div>
+        <div class="hw-body"><span class="hw-name">${esc(it.name)}</span><span class="hw-spec">${esc(it.spec)}</span>
+          <span class="hw-price">${kyat(it.price)}<small>ကျပ်</small></span></div>
       </a>`;
 }
 
 function hardwareDetailCard(it: MenuHardwareItem): string {
-  const points = it.points.map((p) => `<li>${esc(p)}</li>`).join('');
+  const sample = it.samplePhoto ? '<span class="sample">နမူနာပုံ</span>' : '';
+  const best = it.bestFor ? `\n            <span class="best">${esc(it.bestFor)}</span>` : '';
   return `
-        <article class="hwd-card" id="${esc(it.slug)}" aria-labelledby="t-${esc(it.slug)}">
-          <div class="hw-ph"><img src="${esc(it.image)}" alt="${esc(it.name)}" width="360" height="360" loading="lazy"></div>
-          <div class="hwd-body">
-            <span class="hw-cat">${esc(it.category)}</span>
-            <h3 class="hw-name" id="t-${esc(it.slug)}">${esc(it.name)}</h3>
-            <span class="hw-var">${esc(it.variant)}</span>
-            ${points ? `<ul>${points}</ul>` : ''}
-            ${it.fit ? `<p class="hwd-fit"><b>ကိုက်တဲ့ဆိုင်</b> · ${esc(it.fit)}</p>` : ''}
-            ${it.samplePhoto ? '<span class="rep">ပုံသည် နမူနာပုံ ဖြစ်ပါသည်</span>' : ''}
-            <span class="hw-price">${kyat(it.price)}<small>ကျပ်</small></span>
-          </div>
+        <article class="hw-card" id="${esc(it.slug)}">
+          <div class="ph">${sample}<img src="${esc(it.image)}" alt="${esc(it.name)}" width="360" height="360"></div>
+          <div class="hw-body"><h4 class="hw-name">${esc(it.name)}</h4><span class="hw-spec">${esc(it.spec)}</span>${best}
+            <span class="hw-price">${kyat(it.price)}<small>ကျပ်</small></span></div>
         </article>`;
 }
 
@@ -94,26 +77,18 @@ function pageValues(key: MenuPageKey, data: MenuData): Record<string, string> {
     case 'index': {
       const visibleAi = data.aiChannels.filter((c) => c.visible);
       const visibleHw = data.hardware.filter((h) => h.visible);
-      const fromAi = minOf(visibleAi.map((c) => c.setupFee));
-      const fromHw = minOf(visibleHw.map((h) => h.price));
       return {
-        fromPos: kyat(Math.min(data.packages.commercial, data.packages.enterprise)),
-        customLakh: lakh(base),
-        fromAi: fromAi === null ? '—' : `${lakh(fromAi)} သိန်း`,
-        fromHw: fromHw === null ? '—' : kyat(fromHw),
         commercialPrice: kyat(data.packages.commercial),
         enterprisePrice: kyat(data.packages.enterprise),
-        aiCards: visibleAi
+        customLakh: lakh(base),
+        aiRows: visibleAi
           .map(
             (c) => `
-      <a class="card-link ch" href="/menu/ai-${c.id}">
-        <div class="ch-head"><span class="ic">${CHAT_ICON}</span><div><h3>${esc(c.name)}</h3><p class="ch-sub">${esc(c.subtitle)}</p></div></div>
-        <dl class="facts">
-          <div><dt>တပ်ဆင်ခ (တစ်ကြိမ်)</dt><dd>${lakh(c.setupFee)} သိန်း${c.setupNote ? `<small>${esc(c.setupNote)}</small>` : ''}</dd></div>
-          <div><dt>စောင့်ရမယ့်ကြာချိန်</dt><dd>${esc(c.wait)}</dd></div>
-          <div><dt>လစဉ်</dt><dd>${autoPrice(c.monthlyFrom)}မှ<small>+ AI သုံးစွဲခ</small></dd></div>
-        </dl>
-        <span class="go">ကြာချိန်နဲ့ လိုအပ်တာ ကြည့်ရန် ${ARROW_ICON}</span>
+      <a class="ai-row" href="/menu/ai-${c.id}">
+        <span class="ai-name"><span class="ic">${CHAT_ICON}</span><span><b>${esc(c.name)}</b><small>${esc(c.subtitle)}</small></span></span>
+        <span class="ai-val" data-l="တပ်ဆင်ခ">${lakh(c.setupFee)} သိန်း</span>
+        <span class="ai-val" data-l="ကြာချိန်">${esc(c.wait)}</span>
+        <span class="ai-go">${ARROW_ICON}</span>
       </a>`
           )
           .join(''),
@@ -130,7 +105,6 @@ function pageValues(key: MenuPageKey, data: MenuData): Record<string, string> {
       const json = JSON.stringify(publicCustomData(data.custom, data.general.priceDate)).replace(/</g, '\\u003c');
       return {
         customLakh: lakh(base),
-        customKyat: kyat(base),
         customWeeks: mm(data.custom.weeksBase),
         payFirstPct: mm(payment[0][1]),
         payLastPct: mm(payment[payment.length - 1][1]),
@@ -140,19 +114,10 @@ function pageValues(key: MenuPageKey, data: MenuData): Record<string, string> {
     case 'hardware': {
       const groups = hardwareByCategory(data);
       return {
-        hwPanel:
-          '\n' +
-          groups
-            .map((g) => `        <div class="panel-row"><span>${esc(g.name)}</span><b>${kyat(minOf(g.items.map((i) => i.price))!)} ကျပ်မှ</b></div>`)
-            .join('\n'),
         hwGroups: groups
           .map(
-            (g) => `
-    <div class="hw-group">
-      <div class="hw-group-h"><h3>${esc(g.name)}</h3><p>${esc(g.blurb)}</p></div>
-      <div class="hwd">${g.items.map(hardwareDetailCard).join('')}
-      </div>
-    </div>`
+            (g) =>
+              `<div class="hw-group"><h3>${esc(g.name)}<small>${esc(g.blurb)}</small></h3><div class="hwd">${g.items.map(hardwareDetailCard).join('')}</div></div>`
           )
           .join(''),
       };
@@ -163,16 +128,11 @@ function pageValues(key: MenuPageKey, data: MenuData): Record<string, string> {
       const c = data.aiChannels.find((ch) => `ai-${ch.id}` === key)!;
       const values: Record<string, string> = {
         setupLakh: lakh(c.setupFee),
-        setupKyat: kyat(c.setupFee),
         wait: esc(c.wait),
-        monthly: `${autoPrice(c.monthlyFrom)}မှ`,
-        payFirst: kyat((c.setupFee * AI_PAYMENT_SPLIT[0]) / 100),
-        payLast: kyat((c.setupFee * AI_PAYMENT_SPLIT[1]) / 100),
+        monthly: monthlyFrom(c.monthlyFrom),
       };
       if (c.inboxOnlyFee !== null) {
         values.inboxLakh = lakh(c.inboxOnlyFee);
-        values.inboxPayFirst = kyat((c.inboxOnlyFee * AI_PAYMENT_SPLIT[0]) / 100);
-        values.inboxPayLast = kyat((c.inboxOnlyFee * AI_PAYMENT_SPLIT[1]) / 100);
       }
       return values;
     }

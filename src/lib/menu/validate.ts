@@ -63,15 +63,12 @@ function hardwareItem(value: unknown, i: number): MenuHardwareItem {
   if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)) fail(`${label} link id may only use a–z, 0–9 and dashes`);
   const category = text(h.category, `${label} category`);
   if (!HARDWARE_CATEGORIES.some((c) => c.name === category)) fail(`${label} has an unknown category`);
-  const points = Array.isArray(h.points) ? h.points : [];
-  if (points.length > 8) fail(`${label} can have at most 8 bullet points`);
   return {
     slug,
     category,
     name,
-    variant: text(h.variant, `${label} short description`, { required: false, max: 160 }),
-    points: points.map((p, j) => text(p, `${label} point ${j + 1}`, { max: 200 })).filter(Boolean),
-    fit: text(h.fit, `${label} "fits" line`, { required: false, max: 300 }),
+    spec: text(h.spec, `${label} spec`, { required: false, max: 160 }),
+    bestFor: text(h.bestFor, `${label} best for`, { required: false, max: 80 }),
     price: int(h.price, `${label} price`, 0),
     image: imageUrl(h.image, `${label} photo`),
     samplePhoto: bool(h.samplePhoto),
@@ -145,7 +142,6 @@ export function validateMenuUpdate(input: unknown, current: MenuData): MenuData 
     return {
       ...cur,
       setupFee: int(a.setupFee, `${cur.name} setup fee`, 0),
-      setupNote: text(a.setupNote, `${cur.name} setup note`, { required: false, max: 120 }),
       wait: text(a.wait, `${cur.name} waiting time`, { max: 40 }),
       monthlyFrom: int(a.monthlyFrom, `${cur.name} monthly price`, 0),
       // the Viber page always shows the Staff-Inbox-only price, so it stays required there
@@ -164,6 +160,7 @@ export function validateMenuUpdate(input: unknown, current: MenuData): MenuData 
   }
 
   return {
+    schemaVersion: 2,
     general: {
       priceDate: text(g.priceDate, 'Price list date', { max: 60 }),
       phone: text(g.phone, 'Phone', { max: 60 }),
